@@ -1,0 +1,7 @@
+*.env
+*.xlsx
+*.sas
+data/
+.idea/
+*.patch
+*.cfg

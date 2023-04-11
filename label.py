@@ -20,9 +20,6 @@ ws = wb["Sheet1"]
 
 
 def handle_merged_cells():
-    # TODO: We need to figure out how to detect that a cell is merged. Then we need to unmerge it and distribute the
-    #  text in the left cell to their respective rows. We do this to the entire document first and then save the
-    #  document.
 
     merged_cells = ws.merged_cells.ranges
     merged_cells_list_string = [item.coord for item in merged_cells]
@@ -85,16 +82,10 @@ wb.save("test1.xlsx")
 
 wb1 = load_workbook("test1.xlsx", data_only=True)
 ws1 = wb1["Sheet1"]
-# TODO: Next we need to loop through each row in the worksheet, get the variable name and label, pass label to
-#  chat gpt api and then save our result to our sas file.
+
 
 for row in ws1.iter_rows(min_row=2, min_col=2, max_col=3, values_only=True):
     title, label = row
-    # exclude_list = ["Patient_ID", "Abstraction_Date"]
-    # if any([text in row for text in exclude_list]):
-    #     new_label = label
-    # else:
-    #     new_label = label.split(" ", 1)[1]
 
     response = openai.Completion.create(
         model="text-davinci-003",
