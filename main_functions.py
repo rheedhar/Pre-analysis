@@ -2,19 +2,19 @@ from openpyxl import load_workbook
 import sys
 
 
-def create_output_sheet():
+def extract_sheets():
     # Collect input data from user
     system_arguments = sys.argv
 
     # if cl arguments is less than 2, exit from the entire program
-    if len(system_arguments) < 5:
+    if len(system_arguments) != 5:
         sys.exit("Please ensure to enter the correct number of file names")
 
     # save cl arguments in seperate variables
     name_workbook, name_sheet, output_table, data_file = system_arguments[1:]
 
     # if any of the variables is empty, exit from the entire program
-    if "" in (name_workbook, name_sheet, output_table, data_file):
+    if " " in (name_workbook, name_sheet, output_table, data_file):
         sys.exit("Please ensure to enter a file name")
 
     # load the table shells workbook and extract all the sheet names
@@ -60,7 +60,7 @@ def insert_column(min_row, min_col, start_insert, result_sheet):
         for x in range(len(prev_column_data)):
             cell_to_write = result_sheet.cell(row=x + 1, column=i)
             cell_to_write.value = prev_column_data[x]
-        i += 1
+        i += 2
     return True
 
 
@@ -68,6 +68,7 @@ def insert_column(min_row, min_col, start_insert, result_sheet):
 def handle_merged_cells(result_sheet):
     merged_cells = result_sheet.merged_cells.ranges
     merged_cells_list = [item.coord for item in merged_cells]
+
     for merge_cell in merged_cells_list:
         left_cell_value = result_sheet[merge_cell.split(":")[0]].value
         result_sheet.unmerge_cells(merge_cell)
@@ -75,9 +76,9 @@ def handle_merged_cells(result_sheet):
     return True
 
 
-def paste_data(sh_sheet, ds_sheet):
+def paste_data(sh_sheet, ds_sheet, st_row):
     data_loop_counter = 0
-    for shell_row in sh_sheet.iter_rows(min_row=1, min_col=1):
+    for shell_row in sh_sheet.iter_rows(min_row=st_row, min_col=1):
         shell_row_values = tuple(shell_cell.value for shell_cell in shell_row)
         if any(map(lambda x: x is None, shell_row_values)):
             continue
@@ -112,7 +113,7 @@ def fetch_highlighted_columns(result_sheet, last_column_letter):
     # know the range to sort
     if len(section_with_colors) > 0:
         for i in range(len(section_with_colors)):
-            section_with_colors[i][-1] = f"{last_column_letter[0]}{section_with_colors[i][-1][1:]}"
+            section_with_colors[i][-1] = f"{last_column_letter[0]}{section_with_colors[i][-1][1:]}"  #TODO: For last columns letter, think of how else to grab that info, and handle indexerror exception
 
         # create string for range of columns to be sorted
         for i in range(len(section_with_colors)):
@@ -133,7 +134,7 @@ def sort_rows_data(result_sheet, range_list):
             cell_list = tuple(cell_list)
             cell_value_in_wb.append(cell_list)
 
-        cell_value_in_wb.sort(key=lambda a: a[1], reverse=True)
+        cell_value_in_wb.sort(key=lambda a: a[1], reverse=True)  #TODO: include indexerror exception
 
         if len(cells_in_wb) > 0:
             for i, val1 in enumerate(cells_in_wb):
@@ -142,25 +143,33 @@ def sort_rows_data(result_sheet, range_list):
                     result_sheet[cell_value_coordinate] = cell_value_in_wb[i][j]
 
 
-def format_result_sheet(sh_sheet, merged_value):
-    for row in sh_sheet.iter_rows(min_row=1, min_col=1):
+def format_result_sheet(sh_sheet, col_inserted, st_row):
+    count_loop = 0
+    for row in sh_sheet.iter_rows(min_row=st_row, min_col=2):
         row_values = tuple(row_cell.value for row_cell in row)
         if any(map(lambda x: x is None, row_values)):
             continue
 
-        label_value = row[0].coordinate.value
-        grouped_cells = combine_cells(row[1:])
+        if count_loop == 0:
+            count_loop = 1
+            first_cell = row[0].coordinate
+            label_value = fetch_label(first_cell, sh_sheet)
+            if label_value is None:
+                continue
+
+        label_value = fetch_label(row[0].coordinate, sh_sheet)
+        grouped_cells = combine_cells(row)
 
         for cell in grouped_cells:
             first_cell, second_cell, first_value, second_value = split_cells(cell, sh_sheet)
-            if merged_value:
+            if not col_inserted:
                 if "mean" in label_value.lower():
                     sh_sheet.merge_cells(cell)
                     sh_sheet[cell.split(":")[0]] = f"{first_value}({second_value})"
                 elif any(value in label_value.lower() for value in ("95% ci", "q1, q3", "minimum, maximum", "min, max")):
                     sh_sheet.merge_cells(cell)
                     sh_sheet[cell.split(":")[0]] = f"({first_value}, {second_value})"
-                elif any(value in label_value.lower() for value in ("median", "total patient sample", "number of patients")):
+                elif any(value in label_value.lower() for value in ("median", "total patient sample", "number of patients")): #TODO: Logic faulty, if 'patients' in string of text line will run.
                     sh_sheet.merge_cells(cell)
                     sh_sheet[cell.split(":")[0]] = f"{first_value}"
                 elif any(value in label_value.lower() for value in ("12", "24", "36", "48", "60")):
@@ -174,7 +183,7 @@ def format_result_sheet(sh_sheet, merged_value):
                     sh_sheet[cell.split(":")[0]] = f"{first_value}({second_value})"
                 elif any(value in label_value.lower() for value in ("95% ci", "q1, q3", "minimum, maximum", "min, max")):
                     sh_sheet[cell.split(":")[0]] = f"({first_value}, {second_value})"
-                elif any(value in label_value.lower() for value in ("median", "total patient sample", "number of patients")):
+                elif any(value in label_value.lower() for value in ("median", "total patient sample", "number of patients")): #TODO: Logic faulty, if 'patients' in string of text, line will run.
                     sh_sheet[cell.split(":")[0]] = f"{first_value}"
                 elif any(value in label_value.lower() for value in ("12", "24", "36", "48", "60")):
                     sh_sheet[cell.split(":")[0]] = f"{first_value}%({second_value})"
@@ -200,6 +209,11 @@ def split_cells(cell_value, result_sheet):
     f_value = f_cell.value
     s_value = s_cell.value
     return [f_cell, s_cell, f_value, s_value]
+
+
+def fetch_label(current_cell, sh_sheet):
+    adjacent_cell_value = sh_sheet[current_cell].offset(row=0, column=-1).value
+    return adjacent_cell_value
 
 
 def delete_column(result_sheet):
